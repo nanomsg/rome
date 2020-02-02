@@ -1,0 +1,101 @@
+= ROME: RPC Over Mangos/MsgPack Encapsulation
+
+This library brings together https://github.com/nanomsg/mangos[mangos] and
+https://msgpack.org[MsgPack] to provide a friendlier interface for building
+RPC and similar frameworks.
+
+As with Roman civilization, we hope that this will be a foundation that will
+enable even greater things to be built.
+
+== Protocol Packaging Format
+
+We are inspired by JSON-RPC v2.0, and use that as the basis for our work.
+However, JSON-RPC v2.0 offers capabilities that few use, requiring extra
+complexity, and for which we find little use.
+Consequently, our approach represents a minimalist subset of JSON-RPC,
+modified to use msgpack and mangos for transport.
+We also have made changes intended to allow for higher performance by not
+requiring that messages be encoded using strings.
+
+=== No Batching
+
+Our protocol does not offer at this time any support for batching requests.
+Applications that need batching may do so by presenting a batch API at their
+application layer.
+
+=== No Notifications
+
+Mangos requires a reply, always.
+We will use other patterns (PUB/SUB, SURVEYOR) when strict one reply to one
+request is not needed.
+
+=== Use mangos request IDs
+
+Mangos already embeds a request ID at it's layer.
+So we do not provide support for application supplied request IDs.
+This prevents us from having to concern ourselves with some of the dodgier
+parts of the JSON-RPC specification.
+
+== Examples
+
+To follow....
+
+== RPC
+
+The RPC framework builds upon REQ/REP in mangos.
+This implementation uses separate contexts to provide for concurrency
+both in the client and in the server.  (Server side concurrency is tunable.)
+
+We use context.Context on the client side to provide for request timeouts
+and cancellation, although note that at present cancellation events
+are not propagated to the server as the protocol does not have any way
+to express this.
+
+== Request
+
+Messages are sent as an array for performance reasons.
+
+|===
+|Index|Field|Description
+|0|Version|This is an integer and must have the value 1 for this specification.
+|1|Method|This is the method name, presented as a string.
+|2|Parameters|This is the parameters for the method.
+|===
+
+The method name is normally encoded as the name of the enclosing
+structure concatenated joined with the actual method name using a period.
+For example, "`MyStructure.MyFunction`".
+Implementations may override this name.
+Names beginning with two underscores ("`__`") are reserved for use by this specification.
+Names beginning with a single underscore are reserved for implementation use.
+
+Applications needing to ensure globally unique names are encouraged to use
+reverse-DNS style naming, e.g. "`org.nanomsg.go.rome.Accumulator`".
+(This however comes at a performance cost, and many applications may find
+it simpler to just use very short names.)
+
+The parameters may be any valid MsgPack value, including `null`, simple data
+types, maps, and arrays.
+
+=== Response
+
+|===
+|Index|Field|Description
+|0|Version|As with requests, this is an integer value 1.
+|1|Success|This boolean indicates whether the call succeeded.
+|2|Result|This will either be an Error object (if Success is false),
+          or the results from a successful call.
+|===
+
+==== Error objects
+
+In order to facilitate consistent error handling, we have structure for errors.
+These error objects are also arrays.
+
+|===
+|Index|Field|Description
+|0|Code|An integer error code representing the error.  Some errors are reserved, see below.
+|1|Message|A string with a human-readable message.
+|2|Details|Additional information about the error.  This is specific to each
+           error, and may be used to convey any payload needed.
+|===

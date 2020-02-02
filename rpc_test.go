@@ -1,0 +1,127 @@
+// Copyright 2020 Staysail Systems, Inc. <info@staysail.tech>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package rome
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+)
+
+type Accumulator struct {
+	num  int
+	lock sync.Mutex
+}
+
+func MustPass(t *testing.T, e error, what string) {
+	if e != nil {
+		t.Errorf("%s: did not pass: %v", what, e)
+	}
+}
+
+func MustFail(t *testing.T, e error, expect error, what string) {
+	if e == nil {
+		t.Errorf("%s: should have failed but did not", what)
+		return
+	}
+
+	if expect == nil {
+		return
+	}
+
+	if errors.Is(e, expect) {
+		return
+	}
+
+	t.Errorf("%s: should have failed as %v but was %v", what, expect, e)
+}
+
+func (a *Accumulator) Add(x *int, result *int) error {
+	if *x >= 1000 {
+		return errors.New("addend too large")
+	}
+
+	a.lock.Lock()
+	a.num += *x
+	*result = a.num
+	a.lock.Unlock()
+	return nil
+}
+
+func makePair(t *testing.T, url string, a *Accumulator) (RpcServer, RpcClient) {
+	server := NewRpcServer()
+	client := NewRpcClient()
+
+	MustPass(t, server.Register(a), "Register Accumulator")
+	MustPass(t, server.Listen(url), "server listen")
+
+	server.ServeAsync(3)
+
+	MustPass(t, client.Dial(url), "client dial")
+	time.Sleep(time.Millisecond*20) // give time for settling
+	return server, client
+}
+
+func TestRpcBasic(t *testing.T) {
+
+	a := &Accumulator{}
+
+	server, client := makePair(t, "inproc:///rpc_basic", a)
+	defer server.Close()
+	defer client.Close()
+
+	var arg, res int
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	arg = 5
+	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call")
+	if res != 5 {
+		t.Errorf("Wrong result: %v", res)
+	}
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	arg = 57
+	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call2")
+	if res != 5+57 {
+		t.Errorf("Wrong result: %v", res)
+	}
+}
+
+func TestRpcMethodNotFound(t *testing.T) {
+
+	a := &Accumulator{}
+
+	server, client := makePair(t, "inproc:///rpc_basic", a)
+	defer server.Close()
+	defer client.Close()
+
+	var arg, res int
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	e := client.Call(ctx, "Accumulator.DoesNotExist", &arg, &res)
+	MustFail(t, e, nil, "method not existent")
+	ne, ok := e.(*Error)
+	if !ok {
+		t.Errorf("expected our error but got %v", e)
+	}
+	if ne.Code != ErrMethodNotFound {
+		t.Errorf("wrong code: %v != %v", ne.Code, ErrMethodNotFound)
+	}
+	if ne.Message != "method not found" {
+		t.Errorf("wrong message: %v", ne.Message)
+	}
+}
