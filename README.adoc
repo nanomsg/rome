@@ -7,6 +7,12 @@ RPC and similar frameworks.
 As with Roman civilization, we hope that this will be a foundation that will
 enable even greater things to be built.
 
+== Status
+
+This is early work at this stage.
+We expect the API may evolve over the next week or so, as we add
+functionality, examples, and test coverage.
+
 == Protocol Packaging Format
 
 We are inspired by JSON-RPC v2.0, and use that as the basis for our work.
