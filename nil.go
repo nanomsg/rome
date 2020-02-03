@@ -23,7 +23,7 @@ import "github.com/vmihailenco/msgpack"
 // or returns as *Nil.
 type Nil struct {}
 
-// EncodeMsgPack implements the msgpack.CustomEncoder interface.
+// EncodeMsgpack implements the msgpack.CustomEncoder interface.
 func (*Nil) EncodeMsgpack(enc *msgpack.Encoder) error {
 	return enc.EncodeNil()
 }
