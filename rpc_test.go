@@ -192,3 +192,41 @@ func TestRpcBareFunc(t *testing.T) {
 		t.Errorf("Wrong result: %v", res)
 	}
 }
+
+func TestRpcTime(t *testing.T) {
+
+	a := &Accumulator{}
+
+	server, client := makePair(t, "inproc:///rpc_bare_func", a)
+	defer server.Close()
+	defer client.Close()
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	now := time.Now().UnixNano()
+	var res int64
+
+	MustPass(t, client.Call(ctx, "_rpc.time", nil, &res), "call")
+	if res < now {
+		t.Errorf("Wrong result: want %v < %v", now, res)
+	}
+}
+
+func TestRpcMethods(t *testing.T) {
+
+	a := &Accumulator{}
+
+	server, client := makePair(t, "inproc:///rpc_bare_func", a)
+	defer server.Close()
+	defer client.Close()
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	var res []string
+
+	MustPass(t, client.Call(ctx, "_rpc.methods", nil, &res), "call")
+	if len(res) < 3 {
+		t.Errorf("method list too short")
+	}
+	for _, m := range res {
+		t.Logf("method: %s", m)
+	}
+}

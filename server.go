@@ -18,7 +18,9 @@ import (
 	"bytes"
 	"errors"
 	"reflect"
+	"sort"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/vmihailenco/msgpack"
@@ -83,6 +85,7 @@ func NewRpcServer() RpcServer {
 	s := &rpcServer{}
 	s.socket, _ = rep.NewSocket()
 	s.methods = make(map[string]*rpcMethod)
+	s.registerBuiltins()
 	return s
 }
 
@@ -427,4 +430,31 @@ func (s *rpcServer) Register(obj interface{}) error {
 		return errors.New("receiver type not exported")
 	}
 	return s.RegisterName(name, obj)
+}
+
+
+// Built in methods.
+func (s *rpcServer) getMethods(args *Nil, result *[]string) error {
+	s.lock.Lock()
+	names := make([]string, 0, len(s.methods))
+	for name := range s.methods {
+		names = append(names, name)
+	}
+	s.lock.Unlock()
+	sort.Strings(names)
+	*result = names
+	return nil
+}
+func (s *rpcServer) getTime(args *Nil, result *int64) error {
+	*result = time.Now().UnixNano()
+	return nil
+}
+
+func (s *rpcServer) registerBuiltins()  {
+	if e := s.RegisterFunc("_rpc.methods", s.getMethods); e != nil {
+		return
+	}
+	if e := s.RegisterFunc("_rpc.time", s.getTime); e != nil {
+		return
+	}
 }

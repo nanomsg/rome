@@ -250,6 +250,13 @@ func (c *rpcClient) Call(ctx context.Context, name string, args interface{}, res
 			return
 		}
 
+		// If the caller has passed nil, that means either the function
+		// returns no results, or the caller does not care.  Either
+		// way we discard them.
+		if result == nil {
+			return
+		}
+
 		if e := dec.Decode(result); e != nil {
 			doneError = e
 			return
