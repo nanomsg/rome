@@ -35,10 +35,12 @@ const (
 	ErrBadVersion     = -32001
 )
 
+// Error implements the error interface.
 func (z *Error) Error() string {
 	return z.Message
 }
 
+// Unwrap provides for the go 1.13 unwrap operation on errors.
 func (z *Error) Unwrap() error {
 	if e, ok := z.Data.(error); ok {
 		return e
