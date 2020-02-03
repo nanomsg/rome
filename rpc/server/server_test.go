@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rome
+package server
 
 import (
 	"context"
@@ -20,6 +20,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"go.nanomsg.org/rome/rpc"
+	"go.nanomsg.org/rome/rpc/client"
 )
 
 type Accumulator struct {
@@ -62,40 +65,40 @@ func (a *Accumulator) Add(x *int, result *int) error {
 	return nil
 }
 
-func makePair(t *testing.T, url string, a *Accumulator) (RpcServer, RpcClient) {
-	server := NewRpcServer()
-	client := NewRpcClient()
+func makePair(t *testing.T, url string, a *Accumulator) (Server, client.Client) {
+	srv := NewServer()
+	cli := client.NewClient()
 
-	MustPass(t, server.Register(a), "Register Accumulator")
-	MustPass(t, server.Listen(url), "server listen")
+	MustPass(t, srv.Register(a), "Register Accumulator")
+	MustPass(t, srv.Listen(url), "server listen")
 
-	server.ServeAsync(3)
+	srv.ServeAsync(3)
 
-	MustPass(t, client.Dial(url), "client dial")
+	MustPass(t, cli.Dial(url), "client dial")
 	time.Sleep(time.Millisecond*20) // give time for settling
-	return server, client
+	return srv, cli
 }
 
 func TestRpcBasic(t *testing.T) {
 
 	a := &Accumulator{}
 
-	server, client := makePair(t, "inproc:///rpc_basic", a)
-	defer server.Close()
-	defer client.Close()
+	srv, cli := makePair(t, "inproc:///rpc_basic", a)
+	defer srv.Close()
+	defer cli.Close()
 
 	var arg, res int
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	arg = 5
-	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call")
+	MustPass(t, cli.Call(ctx, "Accumulator.Add", &arg, &res), "call")
 	if res != 5 {
 		t.Errorf("Wrong result: %v", res)
 	}
 
 	ctx, _ = context.WithTimeout(context.Background(), time.Second)
 	arg = 57
-	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call2")
+	MustPass(t, cli.Call(ctx, "Accumulator.Add", &arg, &res), "call2")
 	if res != 5+57 {
 		t.Errorf("Wrong result: %v", res)
 	}
@@ -105,21 +108,21 @@ func TestRpcMethodNotFound(t *testing.T) {
 
 	a := &Accumulator{}
 
-	server, client := makePair(t, "inproc:///rpc_not_found", a)
-	defer server.Close()
-	defer client.Close()
+	srv, cli := makePair(t, "inproc:///rpc_not_found", a)
+	defer srv.Close()
+	defer cli.Close()
 
 	var arg, res int
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	e := client.Call(ctx, "Accumulator.DoesNotExist", &arg, &res)
+	e := cli.Call(ctx, "Accumulator.DoesNotExist", &arg, &res)
 	MustFail(t, e, nil, "method not existent")
 	ne, ok := e.(*Error)
 	if !ok {
 		t.Errorf("expected our error but got %v", e)
 	}
-	if ne.Code != ErrMethodNotFound {
-		t.Errorf("wrong code: %v != %v", ne.Code, ErrMethodNotFound)
+	if ne.Code != rpc.ErrMethodNotFound {
+		t.Errorf("wrong code: %v != %v", ne.Code, rpc.ErrMethodNotFound)
 	}
 	if ne.Message != "method not found" {
 		t.Errorf("wrong message: %v", ne.Message)
@@ -130,23 +133,23 @@ func TestRpcMethodFails(t *testing.T) {
 
 	a := &Accumulator{}
 
-	server, client := makePair(t, "inproc:///rpc_fails", a)
-	defer server.Close()
-	defer client.Close()
+	srv, cli := makePair(t, "inproc:///rpc_fails", a)
+	defer srv.Close()
+	defer cli.Close()
 
 	var arg, res int
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 
 	arg = 1e9
-	e := client.Call(ctx, "Accumulator.Add", &arg, &res)
+	e := cli.Call(ctx, "Accumulator.Add", &arg, &res)
 	MustFail(t, e, nil, "method not existent")
 	ne, ok := e.(*Error)
 	if !ok {
 		t.Errorf("expected our error but got %v", e)
 	}
-	if ne.Code != ErrUnspecified {
-		t.Errorf("wrong code: %v != %v", ne.Code, ErrUnspecified)
+	if ne.Code != rpc.ErrUnspecified {
+		t.Errorf("wrong code: %v != %v", ne.Code, rpc.ErrUnspecified)
 	}
 	if ne.Message != "addend too large" {
 		t.Errorf("wrong message: %v", ne.Message)
@@ -165,29 +168,29 @@ func TestRpcBareFunc(t *testing.T) {
 
 	a := &Accumulator{}
 
-	server, client := makePair(t, "inproc:///rpc_bare_func", a)
-	defer server.Close()
-	defer client.Close()
+	srv, cli := makePair(t, "inproc:///rpc_bare_func", a)
+	defer srv.Close()
+	defer cli.Close()
 
-	MustPass(t, server.RegisterFunc("subtract", Subtract), "register bare name")
+	MustPass(t, srv.RegisterFunc("subtract", Subtract), "register bare name")
 	var arg, res int
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	arg = 5
-	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call")
+	MustPass(t, cli.Call(ctx, "Accumulator.Add", &arg, &res), "call")
 	if res != 5 {
 		t.Errorf("Wrong result: %v", res)
 	}
 
 	ctx, _ = context.WithTimeout(context.Background(), time.Second)
 	arg = 57
-	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call2")
+	MustPass(t, cli.Call(ctx, "Accumulator.Add", &arg, &res), "call2")
 	if res != 5+57 {
 		t.Errorf("Wrong result: %v", res)
 	}
 
 	ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	MustPass(t, client.Call(ctx, "subtract", []int{5, 3}[:], &res), "call2")
+	MustPass(t, cli.Call(ctx, "subtract", []int{5, 3}[:], &res), "call2")
 	if res != 2 {
 		t.Errorf("Wrong result: %v", res)
 	}
@@ -197,15 +200,15 @@ func TestRpcTime(t *testing.T) {
 
 	a := &Accumulator{}
 
-	server, client := makePair(t, "inproc:///rpc_bare_func", a)
-	defer server.Close()
-	defer client.Close()
+	srv, cli := makePair(t, "inproc:///rpc_bare_func", a)
+	defer srv.Close()
+	defer cli.Close()
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	now := time.Now().UnixNano()
 	var res int64
 
-	MustPass(t, client.Call(ctx, "_rpc.time", nil, &res), "call")
+	MustPass(t, cli.Call(ctx, "_rpc.time", nil, &res), "call")
 	if res < now {
 		t.Errorf("Wrong result: want %v < %v", now, res)
 	}
@@ -215,14 +218,14 @@ func TestRpcMethods(t *testing.T) {
 
 	a := &Accumulator{}
 
-	server, client := makePair(t, "inproc:///rpc_bare_func", a)
-	defer server.Close()
-	defer client.Close()
+	srv, cli := makePair(t, "inproc:///rpc_bare_func", a)
+	defer srv.Close()
+	defer cli.Close()
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	var res []string
 
-	MustPass(t, client.Call(ctx, "_rpc.methods", nil, &res), "call")
+	MustPass(t, cli.Call(ctx, "_rpc.methods", nil, &res), "call")
 	if len(res) < 3 {
 		t.Errorf("method list too short")
 	}

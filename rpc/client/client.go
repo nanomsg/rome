@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rome
+package client
 
 import (
 	"bytes"
@@ -21,15 +21,18 @@ import (
 	"fmt"
 
 	"github.com/vmihailenco/msgpack"
-	"nanomsg.org/go/mangos/v2"
-	"nanomsg.org/go/mangos/v2/protocol/req"
+	"go.nanomsg.org/mangos/v3"
+	"go.nanomsg.org/mangos/v3/protocol/req"
+	// import all the transports
+	_ "go.nanomsg.org/mangos/v3/transport/all"
 
-	_ "nanomsg.org/go/mangos/v2/transport/all"
+	"go.nanomsg.org/rome"
+	"go.nanomsg.org/rome/rpc"
 )
 
 // This relates to the RPC rpcClient.
 
-type RpcClient interface {
+type Client interface {
 	// Call calls an RPC.  This runs synchronously, and may be canceled
 	// via the context.  It is possible for multiple outstanding calls
 	// to be posted this way.  The args may be nil, or an array or a
@@ -61,7 +64,7 @@ type RpcClient interface {
 	Close()
 }
 
-func NewRpcClient() RpcClient {
+func NewClient() Client {
 	c := &rpcClient{}
 	c.socket, _ = req.NewSocket()
 	return c
@@ -74,6 +77,17 @@ type rpcClient struct {
 func (c *rpcClient) Close() {
 	_ = c.socket.Close()
 }
+
+// Re-export some names from the parent rome package.
+
+type OptionOther = rome.OptionOther
+type OptionDialAsync = rome.OptionDialAsync
+type OptionReconnectTime = rome.OptionReconnectTime
+type OptionMaxReconnectTime = rome.OptionMaxReconnectTime
+type OptionTLSConfig = rome.OptionTLSConfig
+type OptionRetryTime = rome.OptionRetryTime
+type Nil = rome.Nil
+type Error = rpc.Error
 
 // NB: We don't use the mangos timeout options.  Instead we rely on the
 // context to provide a global timeout which encompasses both the send

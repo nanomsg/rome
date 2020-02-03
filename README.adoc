@@ -4,11 +4,11 @@ image:https://img.shields.io/github/workflow/status/nanomsg/rome/linux?logoColor
 image:https://img.shields.io/github/workflow/status/nanomsg/rome/windows?logoColor=grey&logo=windows&label=[Windows Status,link="https://github.com/nanomsg/rome/actions"]
 image:https://img.shields.io/github/workflow/status/nanomsg/rome/darwin?logoColor=grey&logo=apple&label=[Darwin Status,link="https://github.com/nanomsg/rome/actions"]
 image:https://img.shields.io/codecov/c/github/nanomsg/rome?logoColor=grey&logo=codecov&label=[Coverage,link="https://codecov.io/gh/nanomsg/rome"]
+image:https://img.shields.io/codacy/grade/619d463a779d4b20bcf653323dee9a73?logoColor=grey&logo=codacy&label=[Code Quality,link="https://app.codacy.com/manual/nanomsg/rome/dashboard"]
 image:https://img.shields.io/badge/godoc-docs-blue.svg?label=&logo=go[GoDoc,link="https://godoc.org/go.nanomsg.org/rome"]
 image:https://img.shields.io/github/license/nanomsg/mangos.svg?logoColor=silver&logo=Open Source Initiative&label=&color=blue[Apache 2.0 License,link="https://github.com/nanomsg/rome/blob/master/LICENSE"]
 image:https://img.shields.io/discord/639573728212156478?label=&logo=discord[Discord,link="https://discord.gg/wewTkby"]
 
-// image:https://img.shields.io/codacy/grade/0addd1f6c00e4251b37854f3499e6d76?logoColor=grey&logo=codacy&label=[Code Quality,link="https://app.codacy.com/manual/gdamore/mangos/dashboard"]
 // image:https://img.shields.io/github/v/tag/nanomsg/rome?logo=github&sort=semver&label=[Latest version,link="https://github.com/nanomsg/rome/releases"]
 
 This library brings together https://github.com/nanomsg/mangos[mangos] and

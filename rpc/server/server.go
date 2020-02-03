@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rome
+package server
 
 import (
 	"bytes"
@@ -24,15 +24,19 @@ import (
 	"unicode"
 
 	"github.com/vmihailenco/msgpack"
-	"nanomsg.org/go/mangos/v2"
-	"nanomsg.org/go/mangos/v2/protocol/rep"
+	"go.nanomsg.org/mangos/v3"
+	"go.nanomsg.org/mangos/v3/protocol/rep"
 
-	_ "nanomsg.org/go/mangos/v2/transport/all"
+	// import all the transports
+	_ "go.nanomsg.org/mangos/v3/transport/all"
+
+	"go.nanomsg.org/rome"
+	"go.nanomsg.org/rome/rpc"
 )
 
-// This relates to the RPC rpcServer.
+// This relates to the RPC server.
 
-type RpcServer interface {
+type Server interface {
 
 	// Dial is used to dial a remote server.  This may be called multiple
 	// times to dial to different servers.  If multiple connections are
@@ -81,7 +85,8 @@ type RpcServer interface {
 	ServeAsync(workers int)
 }
 
-func NewRpcServer() RpcServer {
+// NewServer allocates a a server instance.
+func NewServer() Server {
 	s := &rpcServer{}
 	s.socket, _ = rep.NewSocket()
 	s.methods = make(map[string]*rpcMethod)
@@ -107,6 +112,39 @@ type rpcServer struct {
 func (s *rpcServer) Close() {
 	_ = s.socket.Close()
 }
+
+type OptionOther = rome.OptionOther
+type OptionDialAsync = rome.OptionDialAsync
+type OptionReconnectTime = rome.OptionReconnectTime
+type OptionMaxReconnectTime = rome.OptionMaxReconnectTime
+type OptionTLSConfig = rome.OptionTLSConfig
+type Nil = rome.Nil
+type Error = rpc.Error
+
+// newErr is used to generate a new error object.  When server methods
+// desire to return an error object, this is preferred to give the most
+// specific error.
+func newErr(code int, message string, data interface{}) *Error {
+	return &Error{
+		Code:    code,
+		Message: message,
+		Data:    data,
+	}
+}
+
+
+func errWrap(e error) *Error {
+	var z *Error
+	if errors.As(e, &z) {
+		return z
+	}
+	return &Error{
+		Code:    rpc.ErrUnspecified,
+		Message: e.Error(),
+		Data:    e,
+	}
+}
+
 
 // NB: We don't use the mangos timeout options.  Instead we rely on the
 // context to provide a global timeout which encompasses both the send
@@ -229,22 +267,22 @@ func (s *rpcServer) serveContext(c mangos.Context) {
 
 		l, e := dec.DecodeArrayLen()
 		if e != nil {
-			sendErr(c, NewError(ErrParse, "message not an array?", e.Error()))
+			sendErr(c, newErr(rpc.ErrParse, "message not an array?", e.Error()))
 			continue
 		}
 		if l != 3 {
-			sendErr(c, NewError(ErrInvalidRequest, "message array length invalid", nil))
+			sendErr(c, newErr(rpc.ErrInvalidRequest, "message array length invalid", nil))
 			continue
 		}
 
 		// Decode version which must be one.
 		ver, e := dec.DecodeUint8()
 		if e != nil {
-			sendErr(c, NewError(ErrParse, "unable to parse version", e.Error()))
+			sendErr(c, newErr(rpc.ErrParse, "unable to parse version", e.Error()))
 			continue
 		}
 		if ver != 1 {
-			sendErr(c, NewError(ErrBadVersion, "bad version (must be 1)", ver))
+			sendErr(c, newErr(rpc.ErrBadVersion, "bad version (must be 1)", ver))
 			continue
 		}
 
@@ -252,11 +290,11 @@ func (s *rpcServer) serveContext(c mangos.Context) {
 		// methods by number.
 		name, e := dec.DecodeString()
 		if e != nil {
-			sendErr(c, NewError(ErrParse, "unable to parse method name", e.Error()))
+			sendErr(c, newErr(rpc.ErrParse, "unable to parse method name", e.Error()))
 			continue
 		}
 		if name == "" {
-			sendErr(c, NewError(ErrMethodNotFound, "method name empty", nil))
+			sendErr(c, newErr(rpc.ErrMethodNotFound, "method name empty", nil))
 			continue
 		}
 
@@ -266,7 +304,7 @@ func (s *rpcServer) serveContext(c mangos.Context) {
 		s.lock.Unlock()
 
 		if !ok || m == nil {
-			sendErr(c, NewError(ErrMethodNotFound, "method not found", nil))
+			sendErr(c, newErr(rpc.ErrMethodNotFound, "method not found", nil))
 			continue
 		}
 
@@ -278,7 +316,7 @@ func (s *rpcServer) serveContext(c mangos.Context) {
 
 		arg := reflect.New(m.argType.Elem())
 		if e = dec.DecodeValue(arg); e != nil {
-			sendErr(c, NewError(ErrInvalidParams, "failed decoding arguments", e.Error()))
+			sendErr(c, newErr(rpc.ErrInvalidParams, "failed decoding arguments", e.Error()))
 			continue
 		}
 		args = append(args, arg)
@@ -291,7 +329,7 @@ func (s *rpcServer) serveContext(c mangos.Context) {
 		if !rv[0].IsNil() {
 			e = rv[0].Interface().(error)
 			if e != nil {
-				sendErr(c, ErrorWrap(e))
+				sendErr(c, errWrap(e))
 				continue
 			}
 		}
@@ -303,12 +341,12 @@ func (s *rpcServer) serveContext(c mangos.Context) {
 			enc.EncodeUint8(1) != nil || // version
 			enc.EncodeBool(true) != nil { // success
 			// this really should never happen
-			sendErr(c, NewError(ErrInternal, "failed to marshal header", nil))
+			sendErr(c, newErr(rpc.ErrInternal, "failed to marshal header", nil))
 			continue
 		}
 
 		if e := enc.EncodeValue(result); e != nil {
-			sendErr(c, NewError(ErrInternal, "failed to marshal result", e.Error()))
+			sendErr(c, newErr(rpc.ErrInternal, "failed to marshal result", e.Error()))
 			continue
 		}
 

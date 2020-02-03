@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rome
-
-import "errors"
+package rpc
 
 // Error is a protocol error exposed in response to a request.
 // It is expressed over the wire as an array.
@@ -22,7 +20,6 @@ type Error struct {
 	Code    int
 	Message string
 	Data    interface{}
-	base    error
 }
 
 // Error codes.  The first set are defined by JSON-RPC, and we use the
@@ -38,35 +35,13 @@ const (
 	ErrBadVersion     = -32001
 )
 
-// NewError is used to generate a new error object.  When rpcServer methods
-// desire to return an error object, this is preferred to give the most
-// specific error.
-func NewError(code int, message string, data interface{}) *Error {
-	return &Error{
-		Code:    code,
-		Message: message,
-		Data:    data,
-		base:    nil,
-	}
-}
-
 func (z *Error) Error() string {
 	return z.Message
 }
 
 func (z *Error) Unwrap() error {
-	return z.base
-}
-
-func ErrorWrap(e error) *Error {
-	var z *Error
-	if errors.As(e, &z) {
-		return z
+	if e, ok := z.Data.(error); ok {
+		return e
 	}
-	return &Error{
-		Code:    ErrUnspecified,
-		Message: e.Error(),
-		Data:    e,
-		base:    e,
-	}
+	return nil
 }
