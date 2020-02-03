@@ -188,6 +188,9 @@ func sendErr(c mangos.Context, err *Error) {
 	if enc.EncodeArrayLen(3) != nil || // array header
 		enc.EncodeUint8(1) != nil || // version
 		enc.EncodeBool(false) != nil || // false
+		enc.EncodeArrayLen(3) != nil ||
+		enc.EncodeInt(int64(err.Code)) != nil ||
+		enc.EncodeString(err.Message) != nil ||
 		enc.Encode(err) != nil {
 		return
 	}

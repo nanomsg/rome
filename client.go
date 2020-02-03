@@ -166,6 +166,26 @@ func (c *rpcClient) Listen(url string, opts ...interface{}) error {
 	return l.Listen()
 }
 
+func decodeError(dec *msgpack.Decoder, de *Error) error {
+	l, e := dec.DecodeArrayLen()
+	if e != nil {
+		return fmt.Errorf("failed decoding error len: %w", e)
+	}
+	if l != 3 {
+		return fmt.Errorf("error length (%d) wrong", l)
+	}
+	if de.Code, e = dec.DecodeInt(); e != nil {
+		return fmt.Errorf("failed decoding error code: %v", e)
+	}
+	if de.Message, e = dec.DecodeString(); e != nil {
+		return fmt.Errorf("failed decoding error: %w", e)
+	}
+	if de.Data, e = dec.DecodeInterface(); e != nil {
+		return fmt.Errorf("failed decoding error data: %w", e)
+	}
+	return de
+}
+
 func (c *rpcClient) Call(ctx context.Context, name string, args interface{}, result interface{}) error {
 	mc, err := c.socket.OpenContext()
 	if err != nil {
@@ -226,12 +246,7 @@ func (c *rpcClient) Call(ctx context.Context, name string, args interface{}, res
 			doneError = fmt.Errorf("failed to decoding success: %w", e)
 			return
 		} else if !pass {
-			ne := &Error{}
-			if e := dec.Decode(ne); e != nil {
-				doneError = fmt.Errorf("failed to decode error: %w", e)
-			} else {
-				doneError = ne
-			}
+			doneError = decodeError(dec, &Error{})
 			return
 		}
 
