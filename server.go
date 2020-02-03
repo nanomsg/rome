@@ -57,6 +57,18 @@ type RpcServer interface {
 	// The type must be an exported type.
 	Register(obj interface{}) error
 
+	// RegisterName is like Register, but allows a different name to
+	// be supplied for the object itself.  If the name is the empty
+	// string then methods will be exposed using the method name without
+	// any prefix.
+	RegisterName(name string, obj interface{}) error
+
+	// RegisterFunc registers a function using the supplied name.
+	// The name has to be supplied because reflection cannot see
+	// function names.  The function must have signature
+	// func(args *ArgType, result *resultType) error.
+	RegisterFunc(name string, fn interface{}) error
+
 	// Serve serves one context synchronously.  This is the simplest
 	// and least form of service, as it runs utterly synchronously.
 	Serve()
@@ -335,8 +347,6 @@ func (s *rpcServer) registerValue(name string, receiver reflect.Value, methodVal
 		return errors.New("missing name")
 	}
 
-	println("Registering", name)
-
 	if methodValue.Kind() != reflect.Func {
 		return errors.New("handler not a method or function")
 	}
@@ -373,28 +383,10 @@ func (s *rpcServer) registerValue(name string, receiver reflect.Value, methodVal
 	return nil
 }
 
-// RegisterFuncName registers a bare function (no receiver or receiver is
-// implied), along with a specific name for the method.  The function fn
-// must have signature func(args *ArgType, result *resultType) error.
-func (s *rpcServer) RegisterFuncName(name string, fn interface{}) error {
+func (s *rpcServer) RegisterFunc(name string, fn interface{}) error {
 	var receiver reflect.Value
 	funcVal := reflect.ValueOf(fn)
 	funcType := reflect.TypeOf(fn)
-	return s.registerValue(name, receiver, funcVal, funcType)
-}
-
-// RegisterFunc registers a function using the name of the function.
-// The function must be exported, and have signature
-// func(args *ArgType, result *resultType) error.
-func (s *rpcServer) RegisterFunc(fn interface{}) error {
-	var receiver reflect.Value
-	funcVal := reflect.ValueOf(fn)
-	funcType := reflect.TypeOf(fn)
-
-	name := funcType.Name()
-	if !isExported(name) {
-		return errors.New("function is not exported")
-	}
 	return s.registerValue(name, receiver, funcVal, funcType)
 }
 

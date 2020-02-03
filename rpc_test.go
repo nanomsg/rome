@@ -105,7 +105,7 @@ func TestRpcMethodNotFound(t *testing.T) {
 
 	a := &Accumulator{}
 
-	server, client := makePair(t, "inproc:///rpc_basic", a)
+	server, client := makePair(t, "inproc:///rpc_not_found", a)
 	defer server.Close()
 	defer client.Close()
 
@@ -123,5 +123,72 @@ func TestRpcMethodNotFound(t *testing.T) {
 	}
 	if ne.Message != "method not found" {
 		t.Errorf("wrong message: %v", ne.Message)
+	}
+}
+
+func TestRpcMethodFails(t *testing.T) {
+
+	a := &Accumulator{}
+
+	server, client := makePair(t, "inproc:///rpc_fails", a)
+	defer server.Close()
+	defer client.Close()
+
+	var arg, res int
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+
+	arg = 1e9
+	e := client.Call(ctx, "Accumulator.Add", &arg, &res)
+	MustFail(t, e, nil, "method not existent")
+	ne, ok := e.(*Error)
+	if !ok {
+		t.Errorf("expected our error but got %v", e)
+	}
+	if ne.Code != ErrUnspecified {
+		t.Errorf("wrong code: %v != %v", ne.Code, ErrUnspecified)
+	}
+	if ne.Message != "addend too large" {
+		t.Errorf("wrong message: %v", ne.Message)
+	}
+}
+
+func Subtract(args *[]int, res *int) error {
+	if len(*args) != 2 {
+		return errors.New("bad params")
+	}
+	*res = (*args)[0] - (*args)[1]
+	return nil
+}
+
+func TestRpcBareFunc(t *testing.T) {
+
+	a := &Accumulator{}
+
+	server, client := makePair(t, "inproc:///rpc_bare_func", a)
+	defer server.Close()
+	defer client.Close()
+
+	MustPass(t, server.RegisterFunc("subtract", Subtract), "register bare name")
+	var arg, res int
+
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	arg = 5
+	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call")
+	if res != 5 {
+		t.Errorf("Wrong result: %v", res)
+	}
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	arg = 57
+	MustPass(t, client.Call(ctx, "Accumulator.Add", &arg, &res), "call2")
+	if res != 5+57 {
+		t.Errorf("Wrong result: %v", res)
+	}
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	MustPass(t, client.Call(ctx, "subtract", []int{5, 3}[:], &res), "call2")
+	if res != 2 {
+		t.Errorf("Wrong result: %v", res)
 	}
 }
