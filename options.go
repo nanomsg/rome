@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// These are options.  We share these between the rpcServer and the rpcClient.
+// These are options.  We share these between the server and the client.
 
 // OptionDialAsync indicates that we wish to dial asynchronously if it is true.
 type OptionDialAsync bool

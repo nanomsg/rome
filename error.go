@@ -17,10 +17,11 @@ package rome
 import "errors"
 
 // Error is a protocol error exposed in response to a request.
+// It is expressed over the wire as an array.
 type Error struct {
-	Code    int         `msgpack:"code"`
-	Message string      `msgpack:"message"`
-	Data    interface{} `msgpack:"data,omitempty"`
+	Code    int
+	Message string
+	Data    interface{}
 	base    error
 }
 
